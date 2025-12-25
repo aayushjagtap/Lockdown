@@ -52,6 +52,34 @@ class Room:
             "winners": result.winners,
             "lowest_score": result.lowest_score,
         }
+    
+    def snapshot_for_player(self, player_id: str) -> dict:
+        p = self.state.players[player_id]
+        return {
+            "room_id": self.room_id,
+            "you": {
+                "id": player_id,
+                "cards": [str(c) for c in p.cards],
+                "called_lockdown": p.called_lockdown,
+            },
+            "players": {
+                pid: {
+                    "card_count": pl.card_count(),
+                    "called_lockdown": pl.called_lockdown,
+                }
+                for pid, pl in self.state.players.items()
+            },
+            "turn": {
+                "current_player": self.state.current_player_id(),
+                "lockdown_called_by": self.state.lockdown_called_by,
+                "lockdown_turns_remaining": self.state.lockdown_turns_remaining,
+                "round_over": self.state.is_round_over(),
+            },
+        "   discard_top": (
+                str(self.state.deck.discard_top()) if self.state.deck.discard_top() else None
+            ),
+        }
+
 
 
 class RoomManager:

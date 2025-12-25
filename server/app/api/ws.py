@@ -15,6 +15,7 @@ rooms = RoomManager()
 async def ws_room(websocket: WebSocket, room_id: str, player_id: str):
     await websocket.accept()
 
+    # Room must exist (in-memory) for this server process
     try:
         room = rooms.get_room(room_id)
     except RuntimeError:
@@ -22,9 +23,17 @@ async def ws_room(websocket: WebSocket, room_id: str, player_id: str):
         await websocket.close()
         return
 
+    # Track socket
     room.sockets.add(websocket)
 
-    async def broadcast_state():
+    # Always send an initial PRIVATE snapshot to this player immediately
+    await websocket.send_json({
+        "type": "state",
+        "payload": room.snapshot_for_player(player_id),
+    })
+
+    # Broadcast is PUBLIC-ONLY (no private cards)
+    async def broadcast_public_state():
         msg = {
             "type": "state",
             "payload": {
@@ -40,8 +49,6 @@ async def ws_room(websocket: WebSocket, room_id: str, player_id: str):
                 dead.append(ws)
         for ws in dead:
             room.sockets.discard(ws)
-
-    await broadcast_state()
 
     try:
         while True:
@@ -67,10 +74,18 @@ async def ws_room(websocket: WebSocket, room_id: str, player_id: str):
                     else:
                         raise RuntimeError("Unknown action type")
 
-                    await broadcast_state()
+                    # Public broadcast for everyone
+                    await broadcast_public_state()
+
+                    # Also re-send PRIVATE snapshot to the acting player so they see updated own cards
+                    await websocket.send_json({
+                        "type": "state",
+                        "payload": room.snapshot_for_player(player_id),
+                    })
 
                 except Exception as e:
                     await websocket.send_json({"type": "error", "payload": {"message": str(e)}})
 
     except WebSocketDisconnect:
         room.sockets.discard(websocket)
+
