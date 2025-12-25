@@ -5,6 +5,7 @@ from typing import Optional
 
 from app.game.card import Card
 from app.game.state import GameState
+from app.game.effects import EffectResult
 
 
 @dataclass(slots=True)
@@ -15,12 +16,19 @@ class TurnActions:
         if player_id != self.state.current_player_id():
             raise RuntimeError("Not this player's turn")
 
-    def draw_and_discard(self, player_id: str) -> Card:
+    def draw_and_discard(self, player_id: str) -> EffectResult:
         self._ensure_current_player(player_id)
+
         card = self.state.deck.draw()
         self.state.deck.discard(card)
+
+        effect = "none"
+        if card.rank == "Q":
+            effect = "queen"
+        elif card.rank == "10":
+            effect = "ten"
         self.state.advance_turn()
-        return card
+        return EffectResult(type=effect, player_id=player_id)
 
     def draw_and_swap(self, player_id: str, card_index: int) -> Card:
         self._ensure_current_player(player_id)
