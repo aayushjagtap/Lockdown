@@ -13,9 +13,11 @@ export default function App() {
   const [lastMsg, setLastMsg] = useState<ServerMsg | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+
   const wsRef = useRef<WebSocket | null>(null);
 
-  // After Step 15, server sends the full per-player snapshot as payload (not payload.state)
+  // Server sends the per-player snapshot as payload
   const state = useMemo(() => {
     if (!lastMsg || lastMsg.type !== "state") return null;
     return lastMsg.payload;
@@ -23,6 +25,8 @@ export default function App() {
 
   function connect() {
     setErr(null);
+    setSelectedIndex(null);
+
     const url = `ws://127.0.0.1:8000/ws/${roomId}/${playerId}`;
     const ws = new WebSocket(url);
 
@@ -47,7 +51,13 @@ export default function App() {
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: "40px auto", fontFamily: "Inter, system-ui, sans-serif" }}>
+    <div
+      style={{
+        maxWidth: 900,
+        margin: "40px auto",
+        fontFamily: "Inter, system-ui, sans-serif",
+      }}
+    >
       <h1>Lockdown</h1>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
@@ -64,7 +74,7 @@ export default function App() {
         </button>
       </div>
 
-      {err && <div style={{ color: "crimson" }}>Error: {err}</div>}
+      {err && <div style={{ color: "crimson", marginBottom: 12 }}>Error: {err}</div>}
 
       {state ? (
         <>
@@ -78,22 +88,32 @@ export default function App() {
 
           <h3>Your Cards</h3>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-            {(state.you?.cards ?? []).map((c: string, i: number) => (
-              <div
-                key={i}
-                style={{
-                  padding: "8px 12px",
-                  border: "1px solid #aaa",
-                  borderRadius: 6,
-                  background: "#111",
-                  minWidth: 44,
-                  textAlign: "center",
-                }}
-                title={`Card ${i}`}
-              >
-                {c}
-              </div>
-            ))}
+            {(state.you?.cards ?? []).map((c: string, i: number) => {
+              const selected = selectedIndex === i;
+              return (
+                <button
+                  key={i}
+                  onClick={() => setSelectedIndex(i)}
+                  style={{
+                    padding: "10px 14px",
+                    border: selected ? "2px solid #fff" : "1px solid #aaa",
+                    borderRadius: 8,
+                    background: selected ? "#222" : "#111",
+                    color: "#fff",
+                    cursor: "pointer",
+                    minWidth: 54,
+                    textAlign: "center",
+                  }}
+                  title={`Select card index ${i}`}
+                >
+                  {c}
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ opacity: 0.75, marginBottom: 12 }}>
+            Selected index: <b>{selectedIndex ?? "(none)"}</b>
           </div>
 
           <h3>Players</h3>
@@ -109,7 +129,31 @@ export default function App() {
           <h3>Actions</h3>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button onClick={() => send({ type: "draw_discard" })}>Draw → Discard</button>
+
+            <button
+              onClick={() => {
+                if (selectedIndex === null) return setErr("Select one of your cards first");
+                send({ type: "draw_swap", card_index: selectedIndex });
+              }}
+            >
+              Draw → Swap (selected)
+            </button>
+
+            <button
+              onClick={() => {
+                if (selectedIndex === null) return setErr("Select one of your cards first");
+                send({ type: "take_discard_swap", card_index: selectedIndex });
+              }}
+            >
+              Take Discard → Swap (selected)
+            </button>
+
             <button onClick={() => send({ type: "call_lockdown" })}>Call Lockdown</button>
+          </div>
+
+          <div style={{ marginTop: 10, opacity: 0.7 }}>
+            Tip: Only the <b>current player</b> can use draw/swap actions. The server will return an error if it’s not
+            your turn.
           </div>
         </>
       ) : (
